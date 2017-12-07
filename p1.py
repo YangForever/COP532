@@ -1,3 +1,4 @@
+
 import icns
 import os
 import signal
@@ -7,44 +8,58 @@ from threading import Thread
 
 FLAG = 1 
 
-
 class Reliability:
     def __init__(self):
         self.ack = '0'
-        self.mesgIDlist = range(128)
+        self.packetIDlist = range(128)
         self.existList = []
-        # 
-        self.seqNum = 0
+
     def Encapsulate(self, data):
-        mesgID = random.choice(list(set(self.mesgIDlist)-set(existList)))
-        self.existList.append(meshID)
-        header = self.ack + bin(mesgID).zfill(7) + bin(self.seqNum).zfill(16)
-        #
-        self.seqNum += 1
-        RnewData = header + data
-        return RnewDAta
+        packetID = random.choice(list(set(self.mesgIDlist)-set(existList)))
+        self.existList.append(packetID)
+        header = self.ack + bin(mesgID)[2:].zfill(7)
+        # binary: '01010....'
+        newData = header + data
+        return newData
+
     def Decapsulate(self, data, nb, n):
-        decapData = data[24:]
-        
-        return decapData
-    def Send_ACK(self, nb, data, n):
+        if data[0] == '0':            
+            decapData = data[8:]
+            ackMesg = Gen_ACK(nb, data, n)
+            return decapData, ackMesg
+        elif data[0] == '1':
+            finMesg = int(data[1:8])
+            self.existList.remove(finMesg)
+            return finMesg, None
+
+
+    def Gen_ACK(self, nb, data, n):
         self.ack = '1'
         ackMesg = self.ack + data[1:]
-        n.send
+        return ackMesg
         
 
-def recv():
+def StringToBianry():
+
+def BinaryToString():
+
+def recv(n, nh, ReLayer):
     # print 'thread 1'
     while 1:
         str = n.receive()
-        ui.addline(str)
-        ui.addline('receive')
+        data, ack = ReLayer.Decapsulate(str[0])
+        if ack:
+            ui.addline(data)
+            n.send(nh, ack)
+        else:
+            ui.addline('ACK from: ' + str(data))
 
-def send(): 
+def send(fd, n, nb, ReLayer): 
     # print 'thread 2'
     while FLAG:
         signal.signal(signal.SIGINT, handler)
         mesg = os.read(fd, 100)
+
         # signal.signal(signal.SIGINT, handler)
         if mesg:
             ui.addline('send')
@@ -62,8 +77,13 @@ if __name__=='__main__':
     neighbour = sys.argv[2].split(":") 
     n = icns.Network(network)
     nh = n.add_neighbour(neighbour[0], int(neighbour[1]))
+
+    ReLayer = Reliability()
     ui = icns.UI('Chat Room')
     fd = ui.getfd()
-    thread1 = Thread(target=recv)
+    
+    thread1 = Thread(target=recv(n, nh, ReLayer))
     thread1.start()
-    send()    
+    
+    send(fd, n, nh, ReLayer)
+
